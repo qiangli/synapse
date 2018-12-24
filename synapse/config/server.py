@@ -471,7 +471,15 @@ def _warn_if_webclient_configured(listeners):
 
 
 KNOWN_RESOURCES = (
-    'client', 'consent', 'federation', 'keys', 'media', 'metrics', 'static', 'webclient',
+    'client',
+    'consent',
+    'federation',
+    'keys',
+    'media',
+    'metrics',
+    'replication',
+    'static',
+    'webclient',
 )
 
 

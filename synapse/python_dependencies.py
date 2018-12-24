@@ -16,7 +16,12 @@
 
 import logging
 
-from pkg_resources import DistributionNotFound, VersionConflict, get_distribution
+from pkg_resources import (
+    DistributionNotFound,
+    Requirement,
+    VersionConflict,
+    get_distribution,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,11 +84,35 @@ CONDITIONAL_REQUIREMENTS = {
 
 
 def list_requirements():
-    deps = set(REQUIREMENTS)
-    for opt in CONDITIONAL_REQUIREMENTS.values():
-        deps = set(opt) | deps
+    # map from project_name to list of specs
+    deps = {}
+    for req in REQUIREMENTS + [
+            o for opt in CONDITIONAL_REQUIREMENTS.values() for o in opt
+    ]:
+        dist = Requirement.parse(req)
+        deps.setdefault(dist.project_name, []).extend(dist.specs)
 
-    return list(deps)
+    for proj, specs in deps.items():
+        # re-parse the requirement, to sort by version
+        req = proj + ",".join(s[0] + s[1] for s in specs)
+        req = Requirement.parse(req)
+
+        # flatten to the most constrained version for each specifier.
+        specs_by_op = {}
+        for op, ver in specs:
+            # if there are multiple '>=' requirements, take the last
+            if op in (">=", ">"):
+                specs_by_op[op] = ver
+
+            # if there are multiple '<' requirements, take the first
+            elif op in ("<=", "<"):
+                if op not in specs_by_op:
+                    specs_by_op[op] = ver
+
+            else:
+                raise Exception("Unknown requirement op " + op)
+
+        yield proj + ",".join(op + ver for op, ver in specs_by_op.items())
 
 
 class DependencyException(Exception):
