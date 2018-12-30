@@ -19,10 +19,27 @@ import re
 import time
 
 from twisted.internet import defer
-from twisted.internet.endpoints import HostnameEndpoint, wrapClientTLS
+from twisted.internet.endpoints import HostnameEndpoint, TCP4ClientEndpoint, wrapClientTLS
 from twisted.internet.error import ConnectError
 from twisted.names import client, dns
 from twisted.names.error import DNSNameError, DomainError
+
+from synapse.http.proxyendpoint import HTTPConnectClientEndpoint
+from six import PY3
+if PY3:
+    from urllib.parse import urlparse
+    from urllib.request import getproxies, proxy_bypass
+else:
+    from urlparse import urlparse
+    from urllib import getproxies, proxy_bypass
+
+def get_proxy(netloc):
+    scheme = "http"
+    if not proxy_bypass(netloc):
+        proxies = getproxies()
+        if scheme in proxies:
+            return proxies[scheme]
+    return None
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +135,20 @@ def matrix_federation_endpoint(reactor, destination, tls_client_options_factory=
     domain, port = parse_server_name(destination)
 
     endpoint_kw_args = {}
+
+    # proxy the request if http_proxy is set
+    http_proxy = get_proxy(destination)
+
+    logger.debug(
+        "matrix_federation_endpoint destination: %s proxy: %s",
+        domain,
+        http_proxy,
+    )
+    if http_proxy is not None:
+        u = urlparse(http_proxy)
+        proxy = TCP4ClientEndpoint(reactor, u.hostname, u.port)
+        proxy_endpoint = HTTPConnectClientEndpoint(domain, port, proxy)
+        return _WrappingEndpointFac(proxy_endpoint, reactor)
 
     if timeout is not None:
         endpoint_kw_args.update(timeout=timeout)
