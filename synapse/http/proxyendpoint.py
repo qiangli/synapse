@@ -77,8 +77,8 @@ class HTTPConnectClient(HTTPClient):
         self.instance_factory = instance_factory
 
     def connectionMade(self):
-        logger.debug("HTTPConnectClient: Proxy connection established: %s:%d",
-                  safe_addr_str(self.proxy_addr.host), self.proxy_addr.port)
+        logger.debug("HTTPConnectClient: Proxy connection established: %s:%d proxy: %s",
+                  safe_addr_str(self.proxy_addr.host), self.proxy_addr.port, self.proxy_addr)
         #
         if self.port is None:
             self.port = 80
@@ -117,6 +117,8 @@ class HTTPConnectClient(HTTPClient):
 
     def rawDataReceived(self, data):
         logger.debug("HTTPConnectClient: Received %d bytes of proxied data", len(data))
+        logger.debug("HTTPConnectClient: Received %s", data)
+
         if self.instance:
             self.instance.dataReceived(data)
         else:

@@ -136,20 +136,32 @@ def matrix_federation_endpoint(reactor, destination, tls_client_options_factory=
 
     endpoint_kw_args = {}
 
-    # proxy the request if http_proxy is set
+    ## proxy the request if http_proxy is set
     http_proxy = get_proxy(destination)
-
     logger.debug(
         "matrix_federation_endpoint destination: %s proxy: %s",
         domain,
         http_proxy,
     )
     if http_proxy is not None:
+        if tls_client_options_factory is None:
+            if port is None:
+                port = 8008
+            endpoint = HTTPConnectClientEndpoint
+        else:
+            if port is None:
+                port = 8448
+            tls_options = tls_client_options_factory.get_options(domain)
+            def endpoint(host, port, proxy):
+                return wrapClientTLS(
+                    tls_options,
+                    HTTPConnectClientEndpoint(host, port, proxy),
+                )
         u = urlparse(http_proxy)
         proxy = TCP4ClientEndpoint(reactor, u.hostname, u.port)
-        proxy_endpoint = HTTPConnectClientEndpoint(domain, port, proxy)
-        return _WrappingEndpointFac(proxy_endpoint, reactor)
+        return _WrappingEndpointFac(endpoint(domain, port, proxy), reactor)
 
+    ##
     if timeout is not None:
         endpoint_kw_args.update(timeout=timeout)
 
@@ -180,7 +192,6 @@ def matrix_federation_endpoint(reactor, destination, tls_client_options_factory=
         return _WrappingEndpointFac(transport_endpoint(
             reactor, domain, port, **endpoint_kw_args
         ), reactor)
-
 
 class _WrappingEndpointFac(object):
     def __init__(self, endpoint_fac, reactor):
